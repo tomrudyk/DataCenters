@@ -47,6 +47,12 @@ Port numbering:
     aggr : ports 0..k/2-1 -> edge switches, ports k/2..k-1 -> core switches
     edge : ports 0..k/2-1 -> hosts,         ports k/2..k-1 -> aggr switches
     host : single port 0
+
+    example:
+    c_1_1:2 <-> a_2_1:3 reads:
+        c_1_1:2: core switch row 1, col 1, port 2. Port 2 faces pod 2
+        a_2_1:3: aggregation switch 1 in pod 2. This matches the pod the core port points to.
+        Port 3 on the aggregation switch is an uplink - connected to core.
 """
 
 import argparse
