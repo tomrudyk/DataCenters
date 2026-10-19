@@ -1,34 +1,6 @@
 """
 k-ary fat-tree topology generator (Al-Fares, Loukissas, Vahdat, SIGCOMM 2008).
 
-INPUT PARAMETERS
-----------------
-k : int  (even, >= 2)
-    Number of ports per switch. Every switch in the network is identical.
-    Every switch core swich is connected to all the pods.
-    This single parameter fixes the whole topology:
-
-        pods                    = k
-        core switches           = (k/2)^2   (k/2 aggr per pod * k/2 upper layrer)
-        aggr switches per pod   = k/2      (upper layer of each pod)
-        edge switches per pod   = k/2      (lower layer of each pod)
-        hosts per edge switch   = k/2
-        total switches          = (k/2)^2 + k*k = 5k^2 / 4
-        total hosts             = k^3 / 4
-        total nodes             = (5k^2 + k^3) / 4 = switches + hosts
-        total links             = k^3/4 + k^3/4 + k^3/4 = 3k^3 / 4
-                                  (core-aggr + aggr-edge + edge-host)
-
-    Examples: k=4  -> 16 hosts, 20 switches (Figure 3 of the paper)
-              k=48 -> 27,648 hosts, 2,880 switches
-
-fail_percent : float in [0, 100]   (optional, default 0)
-    Percentage of links (of all links, any layer) that fail. The links are
-    chosen uniformly at random; the number of failed links is
-    round(total_links * fail_percent / 100).
-
-seed : int   (optional)
-    Random seed, so the same failures can be reproduced.
 
 USAGE
 -----
