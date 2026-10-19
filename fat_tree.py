@@ -5,10 +5,11 @@ INPUT PARAMETERS
 ----------------
 k : int  (even, >= 2)
     Number of ports per switch. Every switch in the network is identical.
+    Every switch core swich is connected to all the pods.
     This single parameter fixes the whole topology:
 
         pods                    = k
-        core switches           = (k/2)^2
+        core switches           = (k/2)^2   (k/2 aggr per pod * k/2 upper layrer)
         aggr switches per pod   = k/2      (upper layer of each pod)
         edge switches per pod   = k/2      (lower layer of each pod)
         hosts per edge switch   = k/2
@@ -21,20 +22,30 @@ k : int  (even, >= 2)
     Examples: k=4  -> 16 hosts, 20 switches (Figure 3 of the paper)
               k=48 -> 27,648 hosts, 2,880 switches
 
+fail_percent : float in [0, 100]   (optional, default 0)
+    Percentage of links (of all links, any layer) that fail. The links are
+    chosen uniformly at random; the number of failed links is
+    round(total_links * fail_percent / 100).
+
+seed : int   (optional)
+    Random seed, so the same failures can be reproduced.
+
 USAGE
 -----
     python fat_tree.py 4                    # print summary
     python fat_tree.py 4 --verbose          # also print every link
-    python fat_tree.py 8 --json out.json    # export topology to JSON
+    python fat_tree.py 8 --fail-percent 10 --seed 1   # fail 10% of the links
 
-    from fat_tree import build_fat_tree
+    from fat_tree import build_fat_tree, fail_links
     nodes, links = build_fat_tree(4)
+    alive, failed = fail_links(links, 10, seed=1)
 
 OUTPUT
 ------
 nodes : dict  name -> {"type": "core"|"aggr"|"edge"|"host", "pod": int or None}
 links : list of (upper_node, port, lower_node, port), ordered top to bottom:
         core-aggr links first, then aggr-edge, then edge-host.
+alive, failed : the links after applying fail_links (alive + failed = links)
 
 Node names (all indices start at 0):
     core switch c_<row>_<col>          (k/2 x k/2 grid)
@@ -56,7 +67,8 @@ Port numbering:
 """
 
 import argparse
-import json
+import random
+from collections import defaultdict
 
 LAYERS = ["core", "aggr", "edge", "host"]    # top to bottom
 
@@ -79,8 +91,8 @@ def build_fat_tree(k):
         raise ValueError("k must be an even integer >= 2")
     half = k // 2
 
-    nodes = {}
-    links = []
+    nodes = {} ## The switch itself and where is it.
+    links = [] ## A list of connections between nodes.
 
     def add_node(name, kind, pod=None):
         nodes[name] = {"type": kind, "pod": pod}
@@ -100,6 +112,8 @@ def build_fat_tree(k):
             for h in range(half):
                 add_node(f"h_{pod}_{e}_{h}", "host", pod)
 
+    
+    
     # Core <-> aggregation: aggr switch a connects to core row a.
     # Its uplink i goes to core (a, i); that core switch's port `pod` faces
     # this pod, so each core switch reaches every pod exactly once.
@@ -121,6 +135,50 @@ def build_fat_tree(k):
                 links.append((f"e_{pod}_{e}", h, f"h_{pod}_{e}_{h}", 0))
 
     return nodes, links
+
+
+
+
+
+def fail_links(links, percent, seed=None):
+    """Randomly fail `percent`% of the links. Returns (alive, failed)."""
+    if not 0 <= percent <= 100:
+        raise ValueError("fail percent must be between 0 and 100")
+    num_failed = round(len(links) * percent / 100)
+    failed = set(random.Random(seed).sample(links, num_failed))
+    # Randomly choosing links to fail
+    # checking wheter a link is in links and not in faild
+    alive = [link for link in links if link not in failed]
+    return alive, list(failed)
+
+
+def largest_host_group(nodes, alive):
+    """Number of hosts in the biggest set of hosts that can still reach each other."""
+
+    # Builds a neighbor list from the links that did not fail, then runs a depth-first
+    # search from each unvisited node to collect one connected group at a time,
+    # marking nodes as seen so each is visited only once. It counts the hosts in
+    # each group and returns the size of the largest one, i.e. how many hosts can still reach each other. 
+    neighbors = defaultdict(list)
+    for a, _, b, _ in alive:
+        neighbors[a].append(b)
+        neighbors[b].append(a)
+
+    seen, best = set(), 0
+    for start in nodes: ## Start looks for a new group
+        if start in seen:                    # already part of a group we counted
+            continue
+        seen.add(start)
+        stack, hosts = [start], 0
+        while stack:                         # depth-first search over one group
+            node = stack.pop()
+            hosts += nodes[node]["type"] == "host"   # count hosts only, not switches
+            for nxt in neighbors[node]:
+                if nxt not in seen:          # visit each node once
+                    seen.add(nxt)
+                    stack.append(nxt)
+        best = max(best, hosts)              # keep the largest group found
+    return best
 
 
 def check_counts(k, nodes, links):
@@ -147,7 +205,9 @@ def main():
     parser = argparse.ArgumentParser(description="Generate a k-ary fat-tree.")
     parser.add_argument("k", type=int, help="ports per switch (even number)")
     parser.add_argument("--verbose", action="store_true", help="print all links")
-    parser.add_argument("--json", metavar="FILE", help="export topology as JSON")
+    parser.add_argument("--fail-percent", type=float, default=0,
+                        help="percentage of links that fail (default 0)")
+    parser.add_argument("--seed", type=int, help="random seed for the failures")
     args = parser.parse_args()
 
     nodes, links = build_fat_tree(args.k)
@@ -159,14 +219,19 @@ def main():
         print(f"  {layer:5s}: {counts[layer]}")
     print(f"  total switches: {counts['switches']}")
 
-    if args.verbose:
-        for a, pa, b, pb in links:
-            print(f"{a}:{pa} <-> {b}:{pb}")
+    alive, failed = fail_links(links, args.fail_percent, args.seed)
+    if failed:
+        group = largest_host_group(nodes, alive)
+        print(f"failed links: {len(failed)} of {len(links)} ({args.fail_percent}%)")
+        print(f"  hosts still connected to each other: {group} of {counts['host']}")
 
-    if args.json:
-        with open(args.json, "w") as f:
-            json.dump({"k": args.k, "nodes": nodes, "links": links}, f, indent=1)
-        print(f"written to {args.json}")
+    if args.verbose:
+        failed_set = set(failed)
+        for link in links:
+            a, pa, b, pb = link
+            mark = "  [FAILED]" if link in failed_set else ""
+            print(f"{a}:{pa} <-> {b}:{pb}{mark}")
+
 
 
 if __name__ == "__main__":
