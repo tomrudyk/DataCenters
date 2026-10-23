@@ -80,22 +80,24 @@ alive, failed = fail_links(links, 10, seed=1)
 **Metrics** (both are a fraction of the k pods):
 
 1. **Intact pods:** pods with no failed link in the pod itself (host-edge and edge-aggr links) or in its uplinks to the core (aggr-core links). The core belongs to no pod, so each uplink is counted for the pod of its aggr switch. The pod and its uplinks have 3k^2/4 links, so the expected value is (1 - p)^(3k^2/4): it collapses quickly as k grows.
+3k^2/4 = (k/2 edge * k/2 hosts) + (k/2 edge * k/2 aggr) + (k/2 aggr * k/2 core)
 2. **Connected pods:** pods with at least one host in the largest group of hosts, where that group must span at least 2 pods (a single pod alone is not a network). These pods can still talk to other pods. A pod only gets cut off when almost all of its k^2/4 uplinks fail.
 
 ## Results
 
-* Intact pods (no failed link in the pod or its uplinks):
+* Intact pods (= no failed link in the pod or its uplinks):
     - Healthy pods disappear fast as k grows, and the measured curves follow the theory (1−p)^(3k^2/4).
     - At 1% failures: k=8 keeps ~60% of pods intact, k=16 keeps ~12.5%, k=24 about 1%, and k=32 none.
-    - The measured line is slightly below the dashed theory because the simulation fails an exact number of links (chosen without replacement) instead of independent coin flips. For k=4, 1% of 48 links also rounds to 0 failures, so that point shows 1.0.
     - Why 1% failures kills many pods for k=32:
         - At 1% for k=32 there are 246 failed links: the network has 3k^3/4 = 24,576 links, and 1% of that is about 246.
         - Those failures spread over 32 pods, so each pod gets about 246 / 32 ≈ 8 failed links on average.
-        - The chance that a pod gets none of them is tiny, about 0.99^768 ≈ 0.0004 (a pod has 768 links).
+        - The chance that a pod gets none of them is tiny, about (1 - 0.01)^(3*32*32/4) = 0.99^768 ≈ 0.0004 (a pod has 768 links).
+
 * Connected pods (must span at least 2 pods):
     - As k gets larger, the pods get more robust.
-    - k=4 starts losing pods at about 20% failures and reaches 0 at 90%. k=8 stays near 100% up to 60% and falls to 36% at 80%. k=16 holds until about 80% and drops to 61% at 90%. k=24 and k=32 are still near 100% at 90%.
+    - k=4 starts losing pods at about 20% failures and reaches 0 at 90%. k=8 stays near 100% up to 60% and falls to 35% at 80%. k=16 holds until about 80% and drops to 61% at 90%. k=24 and k=32 are still near 100% at 90%.
     - At 100% failures every curve is 0, because every host is alone.
+
 
 ## Conclusion
 
