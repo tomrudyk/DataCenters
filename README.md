@@ -12,10 +12,10 @@ Bandwidth - how much data can flow through a link \ network.
 
 Based on Al-Fares, Loukissas, Vahdat, *A Scalable, Commodity Data Center Network Architecture* (SIGCOMM 2008).
 
-- **Topology:** `build_fat_tree(k)` creates the nodes (core, aggregation, edge switches and hosts) and the links layer by layer, from the top down: core-aggr, aggr-edge, edge-host. Inside a pod every edge switch connects to every aggregation switch, and aggregation switch `a` connects to core row `a`, so each core switch reaches every pod exactly once. Every link records the port used on both ends.
+- **Topology:** `build_fat_tree(k)` builds the nodes (core, aggr, edge, host) and links top-down: core-aggr, aggr-edge, edge-host. In a pod, every edge switch connects to every aggr switch; aggr switch `a` connects to core row `a`, so each core switch reaches every pod once. Each link records the port on both ends.
 - **Validation:** `check_counts` compares the generated network with the paper's formulas (see the table below).
 - **Failures:** `fail_links` removes the requested percentage of links at random and returns the links that are alive and the ones that failed.
-- **Analysis:** for each k and failure percentage, the failures are repeated many times. A depth-first search over the surviving links finds the groups of hosts that can still reach each other, and each pod is classified as intact or connected. The results are averaged and plotted.
+- **Analysis:** for each k and failure percentage, random failures are repeated and a depth-first search over the surviving links finds the groups of hosts that can still reach each other. Each pod is classified as intact or connected, and the results are averaged and plotted.
 
 ## Instructions for running the code
 
@@ -33,14 +33,12 @@ Two files:
 | Quantity | Value |
 |---|---|
 | pods | k |
-| aggr switches per pod | k/2 (upper layer of each pod) |
-| edge switches per pod | k/2 (lower layer of each pod) |
-| core switches | (k/2)^2 (k/2 aggr per pod * k/2 upper layrer) |
+| aggr / edge switches per pod | k/2 each |
+| core switches | (k/2)^2 |
 | hosts per edge switch | k/2 |
-| total switches | (k/2)^2 + k·k = 5k^2 / 4 |
+| total switches | (k/2)^2 + k^2 = 5k^2 / 4 |
 | total hosts | k^3 / 4 |
-| total nodes | (5k^2 + k^3) / 4 = switches + hosts |
-| total links | k^3/4 + k^3/4 + k^3/4 = 3k^3 / 4 (core-aggr + aggr-edge + edge-host) |
+| total links | 3 · k^3/4 = 3k^3 / 4 (core-aggr, aggr-edge, edge-host) |
 
   Examples: k=4 gives 16 hosts and 20 switches (Figure 3 of the paper).
 
@@ -81,7 +79,7 @@ alive, failed = fail_links(links, 10, seed=1)
 
 1. **Intact pods:** pods with no failed link in the pod itself (host-edge and edge-aggr links) or in its uplinks to the core (aggr-core links). The core belongs to no pod, so each uplink is counted for the pod of its aggr switch. The pod and its uplinks have 3k^2/4 links, so the expected value is (1 - p)^(3k^2/4): it collapses quickly as k grows.
 3k^2/4 = (k/2 edge * k/2 hosts) + (k/2 edge * k/2 aggr) + (k/2 aggr * k/2 core)
-2. **Connected pods:** pods with at least one host in the largest group of hosts, where that group must span at least 2 pods (a single pod alone is not a network). These pods can still talk to other pods. A pod only gets cut off when almost all of its k^2/4 uplinks fail.
+2. **Connected pods:** pods with at least one host in the largest group of hosts, where that group must span at least 2 pods (a single pod alone is not a network). These pods can still talk to other pods. Cutting a pod off needs at least k^2/4 failed links that together separate all of its hosts from the network (for example, all of its k^2/4 uplinks).
 
 ## Results
 
