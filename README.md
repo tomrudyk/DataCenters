@@ -79,7 +79,7 @@ alive, failed = fail_links(links, 10, seed=1)
 
 1. **Intact pods:** pods with no failed link in the pod itself (host-edge and edge-aggr links) or in its uplinks to the core (aggr-core links). The core belongs to no pod, so each uplink is counted for the pod of its aggr switch. The pod and its uplinks have 3k^2/4 links, so the expected value is (1 - p)^(3k^2/4): it collapses quickly as k grows.
 3k^2/4 = (k/2 edge * k/2 hosts) + (k/2 edge * k/2 aggr) + (k/2 aggr * k/2 core)
-2. **Connected pods:** pods with at least one host in the largest group of hosts, where that group must span at least 2 pods (a single pod alone is not a network). These pods can still talk to other pods. Cutting a pod off needs at worst case atleast k^2/4 failed links that together separate all of its hosts from the network (for example, all of its k^2/4 uplinks).
+2. **Connected pods:** pods with at least one host in the largest group of hosts, where that group must span at least 2 pods (a single pod alone is not a network). These pods can still talk to other pods. The cheapest way to cut a pod off (the minimum cut) needs k^2/4 failed links that together separate all of its hosts from the network (for example, all of its k^2/4 uplinks, or all of its k^2/4 host links).
 
 ## Results
 
@@ -94,7 +94,7 @@ alive, failed = fail_links(links, 10, seed=1)
 * Connected pods (must span at least 2 pods):
     - As k gets larger, the pods get more robust.
     - k=4 starts losing pods at about 20% failures and reaches 0 at 90%. k=8 stays near 100% up to 60% and falls to 35% at 80%. k=16 holds until about 80% and drops to 61% at 90%. k=24 and k=32 are robust, still near 100% at 90%.
-      - It makes sence because each pod has k^2/4 uplinks to the core. Disconnecting a pod requires, at worst case, losing all these paths. (p_failiure)^(k^2/4).
+      - It makes sense because each pod has k^2/4 uplinks to the core. The cheapest way to disconnect a pod is to lose k^2/4 links, for example all of these uplinks, which happens with probability (p_failure)^(k^2/4). There are several such cuts, so this is a lower bound on the chance of disconnection, but it shows the trend.
       - For k=32, p=90%: (0.9)^256 is already tiny.
       - For k=4, p=90%: (0.9)^4 =0.65.
 
